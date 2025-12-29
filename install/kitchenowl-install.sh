@@ -14,7 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
+$STD apt install -y \
   nginx \
   build-essential \
   libpq-dev \
@@ -24,43 +24,19 @@ msg_ok "Installed Dependencies"
 
 PYTHON_VERSION="3.12" setup_uv
 
-msg_info "Downloading KitchenOwl Backend"
-RELEASE=$(curl -fsSL https://api.github.com/repos/TomBursch/kitchenowl/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
-mkdir -p /opt/kitchenowl
-curl -fsSL "https://github.com/TomBursch/kitchenowl/archive/refs/tags/v${RELEASE}.tar.gz" -o /tmp/kitchenowl.tar.gz
-tar -xzf /tmp/kitchenowl.tar.gz -C /tmp
-mv /tmp/kitchenowl-${RELEASE}/backend /opt/kitchenowl/backend
-rm -rf /tmp/kitchenowl.tar.gz /tmp/kitchenowl-${RELEASE}
-echo "${RELEASE}" >"$HOME/.kitchenowl"
-msg_ok "Downloaded KitchenOwl Backend"
+fetch_and_deploy_gh_release "kitchenowl" "TomBursch/kitchenowl" "tarball" "latest" "/opt/kitchenowl"
+rm -rf /opt/kitchenowl/web
+fetch_and_deploy_gh_release "kitchenowl-web" "TomBursch/kitchenowl" "prebuild" "latest" "/opt/kitchenowl/web" "kitchenowl_Web.tar.gz"
 
-msg_info "Downloading KitchenOwl Frontend"
-curl -fsSL "https://github.com/TomBursch/kitchenowl/releases/download/v${RELEASE}/kitchenowl_Web.tar.gz" -o /tmp/kitchenowl_web.tar.gz
-mkdir -p /opt/kitchenowl/web
-tar -xzf /tmp/kitchenowl_web.tar.gz -C /opt/kitchenowl/web
-rm -f /tmp/kitchenowl_web.tar.gz
-msg_ok "Downloaded KitchenOwl Frontend"
-
-msg_info "Installing Python Dependencies"
+msg_info "Setting up KitchenOwl"
 cd /opt/kitchenowl/backend
 $STD uv sync --frozen
-msg_ok "Installed Python Dependencies"
-
-msg_info "Configuring Production Mode"
 sed -i 's/default=True/default=False/' /opt/kitchenowl/backend/wsgi.py
-msg_ok "Configured Production Mode"
-
-msg_info "Downloading NLTK Data"
 mkdir -p /nltk_data
-cd /opt/kitchenowl/backend
 $STD uv run python -m nltk.downloader -d /nltk_data averaged_perceptron_tagger_eng punkt_tab
-msg_ok "Downloaded NLTK Data"
-
-msg_info "Configuring KitchenOwl"
 JWT_SECRET=$(openssl rand -hex 32)
 CONTAINER_IP=$(hostname -I | awk '{print $1}')
 mkdir -p /opt/kitchenowl/data
-
 cat <<EOF >/opt/kitchenowl/kitchenowl.env
 STORAGE_PATH=/opt/kitchenowl/data
 JWT_SECRET_KEY=${JWT_SECRET}
@@ -69,10 +45,6 @@ FRONT_URL=http://${CONTAINER_IP}
 FLASK_APP=wsgi.py
 FLASK_ENV=production
 EOF
-msg_ok "Configured KitchenOwl"
-
-msg_info "Initializing Database"
-cd /opt/kitchenowl/backend
 export STORAGE_PATH=/opt/kitchenowl/data
 export JWT_SECRET_KEY=${JWT_SECRET}
 export NLTK_DATA=/nltk_data
@@ -80,7 +52,7 @@ export FRONT_URL=http://${CONTAINER_IP}
 export FLASK_APP=wsgi.py
 export FLASK_ENV=production
 $STD uv run flask db upgrade
-msg_ok "Initialized Database"
+msg_ok "Set up KitchenOwl"
 
 msg_info "Creating Systemd Service"
 cat <<EOF >/etc/systemd/system/kitchenowl.service

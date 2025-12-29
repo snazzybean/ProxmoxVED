@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVED/main/misc/build.func)
+source <(curl -fsSL https://raw.githubusercontent.com/snazzybean/ProxmoxVED/feature/kitchenowl-test/misc/build.func)
 # Copyright (c) 2021-2025 community-scripts ORG
 # Author: snazzybean
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -29,69 +29,40 @@ function update_script() {
     exit
   fi
 
-  if check_for_gh_release "kitchenowl" "TomBursch/kitchenowl"; then
-    RELEASE=$(get_latest_github_release "TomBursch/kitchenowl")
+  msg_info "Stopping Service"
+  systemctl stop kitchenowl
+  msg_ok "Stopped Service"
 
-    msg_info "Stopping Service"
-    systemctl stop kitchenowl
-    msg_ok "Stopped Service"
+  msg_info "Updating KitchenOwl"
+  mkdir -p /opt/kitchenowl_backup
+  cp -r /opt/kitchenowl/data /opt/kitchenowl_backup/
+  cp -f /opt/kitchenowl/kitchenowl.env /opt/kitchenowl_backup/
 
-    msg_info "Backing up Data and Configuration"
-    mkdir -p /opt/kitchenowl_backup
-    cp -r /opt/kitchenowl/data /opt/kitchenowl_backup/
-    cp -f /opt/kitchenowl/kitchenowl.env /opt/kitchenowl_backup/
-    msg_ok "Backup completed to /opt/kitchenowl_backup"
+  CLEAN_INSTALL=1 fetch_and_deploy_gh_release "kitchenowl" "TomBursch/kitchenowl" "tarball" "latest" "/opt/kitchenowl"
+  sed -i 's/default=True/default=False/' /opt/kitchenowl/backend/wsgi.py
+  CLEAN_INSTALL=1 fetch_and_deploy_gh_release "kitchenowl-web" "TomBursch/kitchenowl" "prebuild" "latest" "/opt/kitchenowl/web" "kitchenowl_Web.tar.gz"
 
-    msg_info "Updating Backend"
-    if ! curl -fsSL "https://github.com/TomBursch/kitchenowl/archive/refs/tags/v${RELEASE}.tar.gz" -o /tmp/kitchenowl.tar.gz; then
-      msg_error "Failed to download backend!"
-      exit 1
-    fi
-    if ! tar -xzf /tmp/kitchenowl.tar.gz -C /tmp; then
-      msg_error "Failed to extract backend!"
-      rm -f /tmp/kitchenowl.tar.gz
-      exit 1
-    fi
-    rm -rf /opt/kitchenowl/backend
-    mv /tmp/kitchenowl-${RELEASE}/backend /opt/kitchenowl/backend
-    rm -rf /tmp/kitchenowl.tar.gz /tmp/kitchenowl-${RELEASE}
-    sed -i 's/default=True/default=False/' /opt/kitchenowl/backend/wsgi.py
-    msg_ok "Updated Backend"
+  cp -r /opt/kitchenowl_backup/data /opt/kitchenowl/
+  cp -f /opt/kitchenowl_backup/kitchenowl.env /opt/kitchenowl/
+  rm -rf /opt/kitchenowl_backup
+  msg_ok "Updated KitchenOwl"
 
-    msg_info "Updating Frontend"
-    if ! curl -fsSL "https://github.com/TomBursch/kitchenowl/releases/download/v${RELEASE}/kitchenowl_Web.tar.gz" -o /tmp/kitchenowl_web.tar.gz; then
-      msg_error "Failed to download frontend!"
-      exit 1
-    fi
-    rm -rf /opt/kitchenowl/web
-    mkdir -p /opt/kitchenowl/web
-    if ! tar -xzf /tmp/kitchenowl_web.tar.gz -C /opt/kitchenowl/web; then
-      msg_error "Failed to extract frontend!"
-      exit 1
-    fi
-    rm -f /tmp/kitchenowl_web.tar.gz
-    msg_ok "Updated Frontend"
+  msg_info "Installing Dependencies"
+  cd /opt/kitchenowl/backend
+  $STD uv sync --frozen
+  msg_ok "Dependencies installed"
 
-    msg_info "Installing Python Dependencies"
-    cd /opt/kitchenowl/backend
-    $STD uv sync --frozen
-    msg_ok "Installed Python Dependencies"
+  msg_info "Running Database Migrations"
+  cd /opt/kitchenowl/backend
+  set -a
+  source /opt/kitchenowl/kitchenowl.env
+  set +a
+  $STD uv run flask db upgrade
+  msg_ok "Database Migrations Complete"
 
-    msg_info "Running Database Migrations"
-    cd /opt/kitchenowl/backend || exit 1
-    set -a
-    source /opt/kitchenowl/kitchenowl.env
-    set +a
-    $STD uv run flask db upgrade
-    msg_ok "Ran Database Migrations"
+  systemctl start kitchenowl
 
-    msg_info "Starting Service"
-    systemctl start kitchenowl
-    msg_ok "Started Service"
-
-    echo "${RELEASE}" >"$HOME/.kitchenowl"
-    msg_ok "Updated successfully to v${RELEASE}"
-  fi
+  msg_ok "Updated Successfully"
   exit
 }
 
