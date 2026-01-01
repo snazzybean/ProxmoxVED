@@ -1,0 +1,50 @@
+{
+  "name": "Proton Mail Bridge",
+  "slug": "protonmailbridge",
+  "categories": [4],
+  "date_created": "2026-01-01",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": null,
+  "documentation": "https://proton.me/support/bridge",
+  "config_path": "/root/.config/protonmail/bridge-v3",
+  "website": "https://github.com/ProtonMail/proton-bridge",
+  "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/protonmail.webp",
+  "description": "Proton Mail Bridge runs locally on your computer and provides a local SMTP/IMAP server, allowing any email client to connect to your Proton Mail account.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/protonmailbridge.sh",
+      "resources": {
+        "cpu": 2,
+        "ram": 2048,
+        "hdd": 8,
+        "os": "Debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "**Important:** After installation, run `protonmail-setup` inside the container to add your account",
+      "type": "warning"
+    },
+    {
+      "text": "Requires a **paid ProtonMail account** (Mail Plus, Unlimited, etc.)",
+      "type": "warning"
+    },
+    {
+      "text": "IMAP: Port 11143 | SMTP: Port 11025 (accessible from other containers/devices)",
+      "type": "info"
+    },
+    {
+      "text": "Run `info` in the CLI to display the generated credentials for email clients",
+      "type": "info"
+    }
+  ]
+}
